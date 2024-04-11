@@ -1,6 +1,23 @@
 .ipynb_checkpoints/
-misc/
-checkpoints/
-lightning_logs/
-weights/
-tb_logs/
+
+# dependencies
+webserver/node_modules
+webserver/.pnp
+webserver/.pnp.js
+
+# testing
+webserver/coverage
+
+# production
+webserver/build
+
+# misc
+webserver/.DS_Store
+webserver/.env.local
+webserver/.env.development.local
+webserver/.env.test.local
+webserver/.env.production.local
+
+webserver/npm-debug.log*
+webserver/yarn-debug.log*
+webserver/yarn-error.log*
