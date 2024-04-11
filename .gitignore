@@ -1,1 +1,6 @@
 .ipynb_checkpoints/
+misc/
+checkpoints/
+lightning_logs/
+weights/
+tb_logs/
