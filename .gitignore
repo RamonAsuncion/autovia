@@ -21,3 +21,9 @@ webserver/.env.production.local
 webserver/npm-debug.log*
 webserver/yarn-debug.log*
 webserver/yarn-error.log*
+
+__pycache__/
+*_logs/
+misc/
+weights/
+checkpoints/
