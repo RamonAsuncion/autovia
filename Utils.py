@@ -16,11 +16,6 @@ import albumentations as A
 from albumentations.pytorch import ToTensorV2
 from torchvision import transforms
 
-DATA_DIR = "~/data/cityscapes/"
-model_weights_dir = "./weights/"
-model_checkpoints_dir = "./checkpoints/"
-tensorboard_logger_dir = "./tb_logs/"
-
 '''
 Some notes: 
 
@@ -135,7 +130,11 @@ class MyClass(Cityscapes):
 
 
 class OurModel(LightningModule):
-    def __init__(self):
+    def __init__(self, data_dir:str="~/data/cityscapes/", lr:float=1e-3, batch_size:int=4):
+        '''
+        inputs: 
+            data_dir (str) - location of the cityscapes data
+        '''
         super(OurModel,self).__init__()
         #architecute
         self.layer = smp.Unet(
@@ -146,16 +145,16 @@ class OurModel(LightningModule):
                 )
 
         #parameters
-        self.lr=1e-3
-        self.batch_size=4
+        self.lr=lr
+        self.batch_size=batch_size
         self.numworker=multiprocessing.cpu_count()//4
 
         self.criterion= smp.losses.DiceLoss(mode='multiclass')
         self.metrics = torchmetrics.JaccardIndex(task="multiclass", num_classes=n_classes)
         
-        self.train_class = MyClass(DATA_DIR, split='train', mode='fine',
+        self.train_class = MyClass(data_dir, split='train', mode='fine',
                         target_type='semantic',transforms=myCustomTransform)
-        self.val_class = MyClass(DATA_DIR, split='val', mode='fine',
+        self.val_class = MyClass(data_dir, split='val', mode='fine',
                         target_type='semantic',transforms=myCustomTransform)
     
     
