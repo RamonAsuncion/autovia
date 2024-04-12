@@ -1,25 +1,48 @@
-import logo from './logo.svg';
-import './App.css';
+import React, { useState } from 'react'
+import './App.css'
 
 function App() {
-  return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
-  );
+    const [image, setImage] = useState(null)
+    const [loading, setLoading] = useState(false)
+
+    const handleImageUpload = (event) => {
+        setLoading(true)
+        const file = event.target.files[0]
+        if (file) {
+            const reader = new FileReader()
+            reader.onloadend = () => {
+                setImage(reader.result)
+                setLoading(false)
+            }
+            reader.readAsDataURL(file)
+        }
+    }
+
+    const clearImage = () => {
+        setImage(null)
+    }
+
+    return (
+        <div className="App">
+            <h1>Semantic Segmentation</h1>
+            <h2>Autonomous Driving</h2>
+            {!image && (
+                <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    className="upload-btn"
+                />
+            )}
+            {loading && <p>Loading...</p>}
+            {image && <img src={image} alt="Uploaded" />}
+            {image && (
+                <button onClick={clearImage} className="clear-btn">
+                    Clear Image
+                </button>
+            )}
+        </div>
+    )
 }
 
-export default App;
+export default App
