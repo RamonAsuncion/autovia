@@ -15,6 +15,7 @@ import torch
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
 from torchvision import transforms
+import cv2
 
 '''
 Some notes: 
@@ -194,3 +195,69 @@ class OurModel(LightningModule):
         self.log('val_loss', loss,on_step=False, on_epoch=True,prog_bar=False)
         self.log('val_jaccard', jaccard,on_step=False, on_epoch=True,prog_bar=False)
         return loss
+
+class InferenceWorker:
+    '''
+    Runs the segmentation model on CPU.
+    '''
+    def __init__(self, model_weights_path : str):
+        assert len(model_weights_path) > 0, 'Empty model_weights_path parameter detected.'
+        
+        model = OurModel()
+        model.load_state_dict(torch.load(model_weights_path))
+        model.eval()
+        self.model = model
+
+    def removeAlphaChannel(self, img : np.ndarray) -> np.ndarray:
+        if img.shape[2] == 4:
+            return img[:,:,:3]
+    
+    def prepare_image(self, img):
+        # Resize the image preserving the aspect ratio
+        target_height = 256
+        target_width = 512
+        height, width, _ = img.shape
+        scale = min(target_height / height, target_width / width)
+        new_height = int(height * scale)
+        new_width = int(width * scale)
+        resized_img = cv2.resize(img, (new_width, new_height))
+        
+        # Pad the image to the required size
+        pad_height = (target_height - new_height) // 2
+        pad_width = (target_width - new_width) // 2
+        padded_img = cv2.copyMakeBorder(resized_img, pad_height, target_height - new_height - pad_height,
+                                        pad_width, target_width - new_width - pad_width, cv2.BORDER_CONSTANT, value=[0, 0, 0])
+
+        # move the color dimension
+        padded_img = np.moveaxis(padded_img, 2, 0)
+
+        # # Normalize the image
+        mean = np.array([0.485, 0.456, 0.406]).reshape(3, 1, 1)
+        std = np.array([0.229, 0.224, 0.225]).reshape(3, 1, 1)
+        padded_img = (padded_img - mean) / std
+        
+        # Add the batch dimension
+        batch_img = np.expand_dims(padded_img, axis=0)
+
+        return batch_img
+    
+    def rawOutputToMask(self, modelOutput):
+        '''
+        converts the raw model output to the segmentation mask ready to view.
+        assume modelOutput is on CPU
+        assume modelOutput shape is of [N, 20, 256, 512] where N is batch size
+        '''
+        return decode_segmap(torch.argmax(modelOutput.detach(), 0))
+
+    def segmentImage(self, img : np.ndarray):
+        '''
+        Given an image in format (H, W, C) normalized to range 0 1, pass it through 
+        the pretrained model loaded in memory and return the segmented image.
+        '''
+        img = self.removeAlphaChannel(img) # removes alpha channel if present
+        tmp = self.prepare_image(img) # resizes, normalizes, and adds an extra batch dim
+        tmp = tmp.astype(np.float32) # ensure correct dtype
+        inputImg = torch.tensor(tmp) # make as torch tensor
+        output = self.model(inputImg) # pass thru model
+        mask_predict = self.rawOutputToMask(output[0]) # remove the batch dim
+        return mask_predict 
