@@ -27,3 +27,5 @@ __pycache__/
 misc/
 weights/
 checkpoints/
+node_modules
+seg-env/
