@@ -2,9 +2,8 @@
 REST API for semantic segmentation inference
 '''
 
-from flask import Response
 import matplotlib.pyplot as plt
-from flask import Flask, request, Response, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 
 import base64
@@ -18,16 +17,14 @@ import cv2
 app = Flask(__name__)
 CORS(app)
 
-current_video_path = None
-video_feed_active = True
-
 MODEL_WEIGHTS_PATH = './weights/model-bnet-one-day.pth'
 inferenceWorker = InferenceWorker(model_weights_path=MODEL_WEIGHTS_PATH)
 
 
 @app.route("/api/segment", methods=["POST"])
 def segment():
-    global video_feed_active
+    print(request.files)
+
     if 'file' not in request.files:
         return jsonify({'error': 'No file part'}), 400
 
@@ -40,21 +37,13 @@ def segment():
     if content_type.startswith('image/'):
         return segmentImage(file)
     elif content_type.startswith('video/'):
-        video_feed_active = True
-        temp_video_path = os.path.join('temp', file.filename)
-        ensure_dir(temp_video_path)
-        file.save(temp_video_path)
-        global current_video_path
-        current_video_path = temp_video_path
-        return segmentVideo()
+        return segmentVideo(file)
     else:
         return jsonify({'error': 'Unsupported file type'}), 400
 
 
 @app.route("/api/clear", methods=["POST"])
 def clear():
-    global video_feed_active
-    video_feed_active = False
     # Clear the temp directory
     for file in os.listdir('temp'):
         file_path = os.path.join('temp', file)
@@ -87,13 +76,33 @@ def segmentImage(file):
     return jsonify({'mask': maskPredB64str}), 200
 
 
-def segmentVideo():
-    global current_video_path, video_feed_active
-    cap = cv2.VideoCapture(current_video_path)
+def segmentVideo(file):
+    # Save the uploaded video file temporarily
+    temp_video_path = os.path.join('temp', file.filename)
+    ensure_dir(temp_video_path)
+    file.save(temp_video_path)
+
+    # Process the video
+    output_video_path = os.path.join('temp', 'output_' + file.filename)
+    process_video(temp_video_path, output_video_path)
+
+    # Send the processed video file back to the client
+    return send_file(output_video_path, mimetype='video/mp4', as_attachment=True)
+
+
+def process_video(video_path: str, output_path: str):
+    cap = cv2.VideoCapture(video_path)
+
+    if not cap.isOpened():
+        print("Error: Could not opne video file.")
+        return
+
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    out = cv2.VideoWriter(output_path, fourcc, 20.0, (512, 256))
 
     while cap.isOpened():
         ret, frame = cap.read()
-        if not ret or video_feed_active is False:
+        if not ret:
             break
 
         # Convert the frame to RGB.
@@ -104,24 +113,18 @@ def segmentVideo():
 
         # Segment the frame.
         segmented_frame = inferenceWorker.segment(frame_normalized)
+        img_float32 = np.float32(segmented_frame)
+        segmented_frame_bgr = cv2.cvtColor(img_float32, cv2.COLOR_RGB2BGR)
 
-        segmented_frame_bgr = (segmented_frame * 255).astype(np.uint8)
-        ret, buffer = cv2.imencode('.jpg', segmented_frame_bgr)
-        frame_bytes = buffer.tobytes()
+        cv2.imshow('Segmented Frame', segmented_frame_bgr)
+        out.write(segmented_frame_bgr)
 
-        # Yield the frame bytes
-        yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
 
     cap.release()
-
-
-@app.route('/video_feed')
-def video_feed():
-    if video_feed_active is False:
-        return jsonify({'message': 'Video cleared'}), 200
-    return Response(segmentVideo(),
-                    mimetype='multipart/x-mixed-replace; boundary=frame')
+    out.release()
+    cv2.destroyAllWindows()
 
 
 def ensure_dir(file_path):

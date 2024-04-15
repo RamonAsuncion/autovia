@@ -7,3 +7,4 @@ torchvision
 segmentation-models-pytorch
 albumentations
 pytorch-lightning
+flask-socketio

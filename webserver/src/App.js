@@ -1,42 +1,68 @@
 import React, { useState, useEffect } from 'react';
 import './App.css';
-// import io from 'socket.io-client';
 
 function App() {
     const [file, setFile] = useState(null);
     const [segmentedImage, setSegmentedImage] = useState(null);
-    const [processedVideoUrl, setProcessedVideoUrl] = useState(null);
+    const [segmentedVideo, setSegmentedVideo] = useState(null);
     const [originalVideoUrl, setOriginalVideoUrl] = useState(null);
     const [status, setStatus] = useState('');
     const [showModal, setShowModal] = useState(false);
     const [canPlayOriginal, setCanPlayOriginal] = useState(false);
+    const [isVideo, setIsVideo] = useState(false);
+    const [streamUrl, setStreamUrl] = useState(null);
+    const [isCleared, setIsCleared] = useState(false);
 
-    // useEffect(() => {
-    //     const socket = io('http://localhost:5000');
-    //     socket.on('video_processed', (data) => {
-    //         setProcessedVideoUrl(data.url);
-    //         setStatus('Video processing complete.');
-    //     });
-    //     return () => socket.disconnect();
-    // }, []);
+    useEffect(() => {
+        // Assuming the Flask server is running on localhost:5000
+        setStreamUrl('http://localhost:5000/video_feed');
+    }, []);
 
     const handleFileUpload = (event) => {
         const file = event.target.files[0];
         if (file) {
             setFile(file);
             setOriginalVideoUrl(URL.createObjectURL(file));
+            setIsVideo(file.type.startsWith('video/'));
+        }
+    };
+
+    const fetchMjpegUrl = async () => {
+        try {
+            const response = await fetch('http://localhost:5000/video_feed');
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            const streamUrl = response.url;
+            setStreamUrl(streamUrl);
+        } catch (error) {
+            console.log("Error here!")
+            setStatus('Failed to connect to the MJPEG stream. Please ensure the Flask server is running.');
+            setShowModal(true);
         }
     };
 
     const handlePredict = async () => {
+        if (isVideo) {
+            await fetchMjpegUrl();
+        }
+
         try {
             const formData = new FormData();
             formData.append('file', file);
+
+            const fileType = file.type.startsWith('image/') ? 'image' : file.type.startsWith('video/') ? 'video' : 'unknown';
+            formData.append('fileType', fileType);
 
             const response = await fetch('http://localhost:5000/api/segment', {
                 method: 'POST',
                 body: formData,
             });
+
+            if (isVideo) {
+                setSegmentedVideo(true);
+                setCanPlayOriginal(true);
+            }
 
             if (!response.ok) {
                 throw new Error('Network response was not ok');
@@ -48,12 +74,14 @@ function App() {
                 setSegmentedImage(maskBase64);
                 setStatus('Prediction complete.');
             }
-        } catch (error) {
-            setStatus('Failed to connect to the API. Please ensure the Flask API is running.');
-            setShowModal(true);
-        }
 
-        setCanPlayOriginal(true);
+        } catch (error) {
+            if (!isVideo || !isCleared) {
+                setStatus('Failed to connect to the API. Please ensure the Flask API is running.');
+                setShowModal(true);
+            }
+            setIsCleared(false);
+        }
     };
 
     const clearTempDirectory = async () => {
@@ -80,9 +108,10 @@ function App() {
     const clearFiles = () => {
         setFile(null);
         setSegmentedImage(null);
+        setSegmentedVideo(null);
         setOriginalVideoUrl(null);
-        setProcessedVideoUrl(null);
         clearTempDirectory();
+        setIsCleared(true);
     };
 
     return (
@@ -113,11 +142,12 @@ function App() {
                     <h3>Predicted</h3>
                     <img src={segmentedImage} alt="Segmented file with semantic labels" />
                 </div>
+
             )}
-            {processedVideoUrl && (
+            {segmentedVideo && (
                 <div>
-                    <h3>Processed Video</h3>
-                    <video controls src={processedVideoUrl} alt="Processed video" />
+                    <h3>Predicted</h3>
+                    <img src={streamUrl} alt="Streamed video frames" />
                 </div>
             )}
             <div className="button-container">
