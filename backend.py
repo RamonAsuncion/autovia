@@ -53,8 +53,9 @@ def segment():
 
 @app.route("/api/clear", methods=["POST"])
 def clear():
-    global video_feed_active
+    global video_feed_active, current_video_path
     video_feed_active = False
+    current_video_path = None
     # Clear the temp directory
     for file in os.listdir('temp'):
         file_path = os.path.join('temp', file)
@@ -92,8 +93,12 @@ def segmentVideo():
     cap = cv2.VideoCapture(current_video_path)
 
     while cap.isOpened():
+
+        if not video_feed_active:
+            break
+
         ret, frame = cap.read()
-        if not ret or video_feed_active is False:
+        if not ret:
             break
 
         # Convert the frame to RGB.
@@ -114,6 +119,7 @@ def segmentVideo():
                b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
 
     cap.release()
+    video_feed_active = False
 
 
 @app.route('/video_feed')

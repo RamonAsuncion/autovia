@@ -4,7 +4,7 @@ import './App.css';
 function App() {
     const [file, setFile] = useState(null);
     const [segmentedImage, setSegmentedImage] = useState(null);
-    const [segmentedVideo, setSegmentedVideo] = useState(null);
+    const [segmentedVideo, setSegmentedVideo] = useState(false);
     const [originalVideoUrl, setOriginalVideoUrl] = useState(null);
     const [status, setStatus] = useState('');
     const [showModal, setShowModal] = useState(false);
@@ -14,7 +14,6 @@ function App() {
     const [isCleared, setIsCleared] = useState(false);
 
     useEffect(() => {
-        // Assuming the Flask server is running on localhost:5000
         setStreamUrl('http://localhost:5000/video_feed');
     }, []);
 
@@ -76,10 +75,11 @@ function App() {
             }
 
         } catch (error) {
-            if (!isVideo || !isCleared) {
-                setStatus('Failed to connect to the API. Please ensure the Flask API is running.');
-                setShowModal(true);
-            }
+            // FIXME: Causing a lot of wrong errors.
+            // if (!isVideo || !isCleared) {
+            //     setStatus('Failed to connect to the API. Please ensure the Flask API is running.');
+            //     setShowModal(true);
+            // }
             setIsCleared(false);
         }
     };
@@ -108,8 +108,9 @@ function App() {
     const clearFiles = () => {
         setFile(null);
         setSegmentedImage(null);
-        setSegmentedVideo(null);
+        setSegmentedVideo(false);
         setOriginalVideoUrl(null);
+        setCanPlayOriginal(false);
         clearTempDirectory();
         setIsCleared(true);
     };
@@ -146,7 +147,7 @@ function App() {
             )}
             {segmentedVideo && (
                 <div>
-                    <h3>Predicted</h3>
+                    <h3>Predicted (Not synced)</h3>
                     <img src={streamUrl} alt="Streamed video frames" />
                 </div>
             )}
