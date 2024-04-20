@@ -73,7 +73,7 @@ function App(props) {
 
             if (isVideo) {
                 setSegmentedVideo(true)
-                setCanPlayOriginal(true)
+                // setCanPlayOriginal(true)
             }
 
             if (!response.ok) {

@@ -69,6 +69,7 @@ def clear():
     if os.path.exists(session_tmp_dir):
         if video_feed_sessions[session_id]['path'] is not None:
             os.remove(video_feed_sessions[session_id]['path'])
+        os.removedirs(session_tmp_dir)
 
     return jsonify({'message': 'Temp directory cleared'}), 200
 
@@ -80,7 +81,7 @@ def segmentImage(file):
     image_np = np.array(image)
     image_np = image_np.astype(np.float32) / 255.0
 
-    mask_pred = inferenceWorker.segment(image_np)
+    mask_pred, _ = inferenceWorker.segment(image_np)
 
     # Convert the mask to a base64 string
     mask_pred = (mask_pred * 255).astype('uint8')
@@ -115,14 +116,24 @@ def segmentVideo(session_id):
         # Convert the frame to RGB.
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
-        # Normalize the frame.
-        frame_normalized = frame_rgb.astype(np.float32) / 255.0
+        # Normalize the frame to [0, 1].
+        frame_0_1 = frame_rgb.astype(np.float32) / 255.0
 
         # Segment the frame.
-        segmented_frame = inferenceWorker.segment(frame_normalized)
+        segmented_frame, input_img_frame = inferenceWorker.segment(frame_0_1)
 
-        segmented_frame_bgr = (segmented_frame * 255).astype(np.uint8)
-        ret, buffer = cv2.imencode('.jpg', segmented_frame_bgr)
+        # Scale them back up to [0, 255] and convert to uint8.
+        segmented_frame_0_255 = (segmented_frame * 255).astype(np.uint8)
+        input_img_frame_0_255 = (input_img_frame * 255).astype(np.uint8)
+
+        # Create a 50-pixel wide white separator
+        height = input_img_frame.shape[0]
+        white_separator = np.full((height, 50, 3), 255, dtype=np.uint8)
+
+        # Concatenate original frame, white separator, and segmented frame horizontally
+        combined_frame = np.hstack((input_img_frame_0_255, white_separator, segmented_frame_0_255))
+
+        ret, buffer = cv2.imencode('.jpg', combined_frame)
         frame_bytes = buffer.tobytes()
 
         # Yield the frame bytes

@@ -158,6 +158,25 @@ def decode_segmap(temp):
     rgb[:, :, 2] = b / 255.0
     return rgb
 
+def plotThreeImages(image, mask_truth, mask_predict):
+    '''
+    assume image and all masks aare on the cpu and NOT on the gpu.
+    assume image is already inverted and all masks are decoded.
+    '''
+    fig,ax=plt.subplots(1,3,figsize=(10,5),facecolor='white')  
+    if isinstance(image, type(torch.tensor)):
+        ax[0].imshow(np.moveaxis(image.numpy(),0,2)) #(3,256, 512)
+    else:
+        # ax[0].imshow(np.moveaxis(image,0,2)) #(3,256, 512)
+        ax[0].imshow(image)
+    ax[1].imshow(mask_truth) #(256, 512, 3)
+    ax[2].imshow(mask_predict) #(256, 512, 3)
+    ax[0].axis('off')
+    ax[1].axis('off')
+    ax[2].axis('off')
+    ax[0].set_title('Input Image')
+    ax[1].set_title('Ground mask')
+    ax[2].set_title('Predicted mask')
 
 class MyClass(Cityscapes):
     """
@@ -361,16 +380,10 @@ class InferenceWorker:
             return img[:, :, :3]
         else:
             return img
-
-    def prepare_image(self, img):
+        
+    def resize_and_pad(self, img : np.ndarray) -> np.ndarray:
         """
-        Prepare the image for the model.
-
-        inputs:
-            img (np.ndarray) - the image to prepare
-
-        returns:
-            batch_img (np.ndarray) - the image prepared for the model
+        Resize the image preserving the aspect ratio and pad it to the required size.
         """
         # Resize the image preserving the aspect ratio
         target_height = 256
@@ -388,8 +401,20 @@ class InferenceWorker:
         padded_img = cv2.copyMakeBorder(resized_img, pad_height, target_height - new_height - pad_height,
                                         pad_width, target_width - new_width - pad_width, cv2.BORDER_CONSTANT, value=[0, 0, 0])
 
+        return padded_img
+
+    def prepare_image(self, img):
+        """
+        Prepare the image for the model.
+
+        inputs:
+            img (np.ndarray) - the image to prepare (assumed to be already resized and padded)
+
+        returns:
+            batch_img (np.ndarray) - the image prepared for the model
+        """
         # move the color dimension
-        padded_img = np.moveaxis(padded_img, 2, 0)
+        padded_img = np.moveaxis(img, 2, 0)
 
         # # Normalize the image
         mean = np.array([0.485, 0.456, 0.406]).reshape(3, 1, 1)
@@ -409,20 +434,27 @@ class InferenceWorker:
         '''
         return decode_segmap(torch.argmax(modelOutput.detach(), 0))
 
-    def segment(self, img: np.ndarray):
+    def segment(self, img: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         '''
         Given an image in format (H, W, C) normalized to range 0 1, pass it through
         the pretrained model loaded in memory and return the segmented image.
+
+        Returns
+            mask_predict (np.ndarray) - the segmented image
+            input_image (np.ndarray) - the input image (resized and padded -- but NOT custom normalized again)
         '''
 
         img = self.remove_alpha_channel(
             img)  # removes alpha channel if present
         # resizes, normalizes, and adds an extra batch dim
 
-        tmp = self.prepare_image(img)
+        resized_and_padded_img = self.resize_and_pad(img)
+        tmp = self.prepare_image(resized_and_padded_img)
+
         tmp = tmp.astype(np.float32)  # ensure correct dtype
         inputImg = torch.tensor(tmp)  # make as torch tensor
         output = self.model(inputImg)  # pass thru model
         mask_predict = self.raw_output_to_mask(
             output[0])  # remove the batch dim
-        return mask_predict
+
+        return mask_predict, resized_and_padded_img
