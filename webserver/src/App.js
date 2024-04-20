@@ -172,7 +172,7 @@ function App(props) {
             )}
             {segmentedVideo && (
                 <div>
-                    <h3>Predicted (Not synced)</h3>
+                    <h3>Predicted</h3>
                     <img src={streamUrl} alt="Streamed video frames" />
                 </div>
             )}
