@@ -29,3 +29,4 @@ weights/
 checkpoints/
 node_modules
 seg-env/
+temp/

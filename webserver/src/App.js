@@ -1,119 +1,134 @@
-import React, { useState, useEffect } from 'react';
-import './App.css';
+import React, { useState, useEffect } from 'react'
+import './App.css'
 
-function App() {
-    const [file, setFile] = useState(null);
-    const [segmentedImage, setSegmentedImage] = useState(null);
-    const [segmentedVideo, setSegmentedVideo] = useState(false);
-    const [originalVideoUrl, setOriginalVideoUrl] = useState(null);
-    const [status, setStatus] = useState('');
-    const [showModal, setShowModal] = useState(false);
-    const [canPlayOriginal, setCanPlayOriginal] = useState(false);
-    const [isVideo, setIsVideo] = useState(false);
-    const [streamUrl, setStreamUrl] = useState(null);
-    const [isCleared, setIsCleared] = useState(false);
+function App(props) {
+    const { sessionId } = props
+
+    const [file, setFile] = useState(null)
+    const [segmentedImage, setSegmentedImage] = useState(null)
+    const [segmentedVideo, setSegmentedVideo] = useState(false)
+    const [originalVideoUrl, setOriginalVideoUrl] = useState(null)
+    const [status, setStatus] = useState('')
+    const [showModal, setShowModal] = useState(false)
+    const [canPlayOriginal, setCanPlayOriginal] = useState(false)
+    const [isVideo, setIsVideo] = useState(false)
+    const [streamUrl, setStreamUrl] = useState(null)
+    const [isCleared, setIsCleared] = useState(false)
 
     useEffect(() => {
-        setStreamUrl('http://localhost:5000/video_feed');
-    }, []);
+        setStreamUrl(`http://localhost:5000/video_feed?session_id=${sessionId}`)
+    }, [])
 
     const handleFileUpload = (event) => {
-        const file = event.target.files[0];
+        const file = event.target.files[0]
         if (file) {
-            setFile(file);
-            setOriginalVideoUrl(URL.createObjectURL(file));
-            setIsVideo(file.type.startsWith('video/'));
+            setFile(file)
+            setOriginalVideoUrl(URL.createObjectURL(file))
+            setIsVideo(file.type.startsWith('video/'))
         }
-    };
+    }
 
     const fetchMjpegUrl = async () => {
         try {
-            const response = await fetch('http://localhost:5000/video_feed');
+            const response = await fetch(
+                `http://localhost:5000/video_feed?session_id=${sessionId}`
+            )
             if (!response.ok) {
-                throw new Error('Network response was not ok');
+                throw new Error('Network response was not ok')
             }
-            const streamUrl = response.url;
-            setStreamUrl(streamUrl);
+            const streamUrl = response.url
+            setStreamUrl(streamUrl)
         } catch (error) {
-            console.log("Error here!")
-            setStatus('Failed to connect to the MJPEG stream. Please ensure the Flask server is running.');
-            setShowModal(true);
+            console.log('Error here!')
+            setStatus(
+                'Failed to connect to the MJPEG stream. Please ensure the Flask server is running.'
+            )
+            setShowModal(true)
         }
-    };
+    }
 
     const handlePredict = async () => {
         if (isVideo) {
-            await fetchMjpegUrl();
+            await fetchMjpegUrl()
         }
 
         try {
-            const formData = new FormData();
-            formData.append('file', file);
+            const formData = new FormData()
+            formData.append('file', file)
 
-            const fileType = file.type.startsWith('image/') ? 'image' : file.type.startsWith('video/') ? 'video' : 'unknown';
-            formData.append('fileType', fileType);
+            const fileType = file.type.startsWith('image/')
+                ? 'image'
+                : file.type.startsWith('video/')
+                  ? 'video'
+                  : 'unknown'
+            formData.append('fileType', fileType)
 
-            const response = await fetch('http://localhost:5000/api/segment', {
-                method: 'POST',
-                body: formData,
-            });
+            const response = await fetch(
+                `http://localhost:5000/api/segment?session_id=${sessionId}`,
+                {
+                    method: 'POST',
+                    body: formData,
+                }
+            )
 
             if (isVideo) {
-                setSegmentedVideo(true);
-                setCanPlayOriginal(true);
+                setSegmentedVideo(true)
+                setCanPlayOriginal(true)
             }
 
             if (!response.ok) {
-                throw new Error('Network response was not ok');
+                throw new Error('Network response was not ok')
             }
 
-            const responseJson = await response.json();
+            const responseJson = await response.json()
             if (responseJson.mask) {
-                const maskBase64 = responseJson.mask;
-                setSegmentedImage(maskBase64);
-                setStatus('Prediction complete.');
+                const maskBase64 = responseJson.mask
+                setSegmentedImage(maskBase64)
+                setStatus('Prediction complete.')
             }
-
         } catch (error) {
             // FIXME: Causing a lot of wrong errors.
             // if (!isVideo || !isCleared) {
             //     setStatus('Failed to connect to the API. Please ensure the Flask API is running.');
             //     setShowModal(true);
             // }
-            setIsCleared(false);
+            setIsCleared(false)
         }
-    };
+    }
 
     const clearTempDirectory = async () => {
         try {
-            const response = await fetch('http://localhost:5000/api/clear', {
-                method: 'POST',
-            });
+            const response = await fetch(
+                `http://localhost:5000/api/clear?session_id=${sessionId}`,
+                {
+                    method: 'POST',
+                }
+            )
 
             if (!response.ok) {
-                throw new Error('Network response was not ok');
+                throw new Error('Network response was not ok')
             }
 
-            const responseJson = await response.json();
+            const responseJson = await response.json()
             if (responseJson.message) {
-                setStatus('Temporary directory cleared.');
+                setStatus('Temporary directory cleared.')
             }
         } catch (error) {
             // Ignore error since it should not affect the user experience.
-            // I'll delete the files next time the user clears while connected 
+            // I'll delete the files next time the user clears while connected
             // to the API.
         }
     }
 
     const clearFiles = () => {
-        setFile(null);
-        setSegmentedImage(null);
-        setSegmentedVideo(false);
-        setOriginalVideoUrl(null);
-        setCanPlayOriginal(false);
-        clearTempDirectory();
-        setIsCleared(true);
-    };
+        setFile(null)
+        setSegmentedImage(null)
+        setSegmentedVideo(false)
+        setOriginalVideoUrl(null)
+        setCanPlayOriginal(false)
+        clearTempDirectory()
+        setIsCleared(true)
+    }
 
     return (
         <div className="App">
@@ -130,9 +145,17 @@ function App() {
                 <div>
                     <h3>Uploaded</h3>
                     {file.type.startsWith('image/') ? (
-                        <img src={URL.createObjectURL(file)} alt="Uploaded file for segmentation" />
+                        <img
+                            src={URL.createObjectURL(file)}
+                            alt="Uploaded file for segmentation"
+                        />
                     ) : file.type.startsWith('video/') ? (
-                        <video controls src={originalVideoUrl} alt="Original video" autoPlay={canPlayOriginal} />
+                        <video
+                            controls
+                            src={originalVideoUrl}
+                            alt="Original video"
+                            autoPlay={canPlayOriginal}
+                        />
                     ) : (
                         <p>Unsupported file type.</p>
                     )}
@@ -141,9 +164,11 @@ function App() {
             {segmentedImage && (
                 <div>
                     <h3>Predicted</h3>
-                    <img src={segmentedImage} alt="Segmented file with semantic labels" />
+                    <img
+                        src={segmentedImage}
+                        alt="Segmented file with semantic labels"
+                    />
                 </div>
-
             )}
             {segmentedVideo && (
                 <div>
@@ -176,7 +201,7 @@ function App() {
                 </div>
             )}
         </div>
-    );
+    )
 }
 
-export default App;
+export default App

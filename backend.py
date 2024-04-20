@@ -18,8 +18,7 @@ import cv2
 app = Flask(__name__)
 CORS(app)
 
-current_video_path = None
-video_feed_active = True
+video_feed_sessions = {}
 
 MODEL_WEIGHTS_PATH = './weights/model-bnet-one-day.pth'
 inferenceWorker = InferenceWorker(model_weights_path=MODEL_WEIGHTS_PATH)
@@ -27,7 +26,11 @@ inferenceWorker = InferenceWorker(model_weights_path=MODEL_WEIGHTS_PATH)
 
 @app.route("/api/segment", methods=["POST"])
 def segment():
-    global video_feed_active
+    global video_feed_sessions
+
+    # get the session_id generated from frontend
+    session_id = request.args.get('session_id')
+    session_tmp_dir = os.path.join('temp', session_id)
     if 'file' not in request.files:
         return jsonify({'error': 'No file part'}), 400
 
@@ -38,40 +41,45 @@ def segment():
     # Check if the file is an image or a video.
     content_type = request.files['file'].content_type
     if content_type.startswith('image/'):
+        print(f'segmenting single image {file.filename} with session_id {session_id}')
+        video_feed_sessions[session_id] = {'path': None, 'active': False}
         return segmentImage(file)
     elif content_type.startswith('video/'):
-        video_feed_active = True
-        temp_video_path = os.path.join('temp', file.filename)
+        temp_video_path = os.path.join(session_tmp_dir, file.filename)
         ensure_dir(temp_video_path)
         file.save(temp_video_path)
-        global current_video_path
-        current_video_path = temp_video_path
-        return segmentVideo()
+        video_feed_sessions[session_id] = {'path': temp_video_path, 'active': True}
+        return segmentVideo(session_id)
     else:
         return jsonify({'error': 'Unsupported file type'}), 400
 
 
 @app.route("/api/clear", methods=["POST"])
 def clear():
-    global video_feed_active, current_video_path
-    video_feed_active = False
-    current_video_path = None
-    # Clear the temp directory
-    for file in os.listdir('temp'):
-        file_path = os.path.join('temp', file)
-        os.remove(file_path)
+    global video_feed_sessions
+
+    # Get the session_id generated from frontend
+    session_id = request.args.get('session_id')
+
+    # clear the video feed session
+    video_feed_sessions[session_id]['active'] = False
+
+    # Clear the video file if it exists
+    session_tmp_dir = os.path.join('temp', session_id)
+    if os.path.exists(session_tmp_dir):
+        if video_feed_sessions[session_id]['path'] is not None:
+            os.remove(video_feed_sessions[session_id]['path'])
+
     return jsonify({'message': 'Temp directory cleared'}), 200
 
 
 def segmentImage(file):
-    temp_image_path = os.path.join('temp', file.filename)
-    ensure_dir(temp_image_path)
-    file.save(temp_image_path)
-
-    # Process the image
-    image = Image.open(temp_image_path)
+    '''segmenting a single image won't require the image file to be saved into disk'''
+    # # Process the image
+    image = Image.open(io.BytesIO(file.read()))
     image_np = np.array(image)
     image_np = image_np.astype(np.float32) / 255.0
+
     mask_pred = inferenceWorker.segment(image_np)
 
     # Convert the mask to a base64 string
@@ -88,13 +96,16 @@ def segmentImage(file):
     return jsonify({'mask': maskPredB64str}), 200
 
 
-def segmentVideo():
-    global current_video_path, video_feed_active
+def segmentVideo(session_id):
+    global video_feed_sessions, inferenceWorker
+
+    current_video_path = video_feed_sessions[session_id]['path']
     cap = cv2.VideoCapture(current_video_path)
 
     while cap.isOpened():
 
-        if not video_feed_active:
+        # Stop the video feed if user clicks the clear button
+        if not video_feed_sessions[session_id]['active']:
             break
 
         ret, frame = cap.read()
@@ -119,16 +130,16 @@ def segmentVideo():
                b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
 
     cap.release()
-    video_feed_active = False
-
 
 @app.route('/video_feed')
 def video_feed():
-    if video_feed_active is False:
-        return jsonify({'message': 'Video cleared'}), 200
-    return Response(segmentVideo(),
-                    mimetype='multipart/x-mixed-replace; boundary=frame')
+    global video_feed_sessions
 
+    session_id = request.args.get('session_id')
+    # if session_id not in video_feed_sessions or not video_feed_sessions[session_id]['active']:
+    #     return jsonify({'message': 'Video cleared or session not found'}), 404
+    return Response(segmentVideo(session_id),
+                    mimetype='multipart/x-mixed-replace; boundary=frame')
 
 def ensure_dir(file_path):
     directory = os.path.dirname(file_path)
