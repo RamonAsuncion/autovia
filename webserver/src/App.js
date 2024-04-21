@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import Legend from './Labels'
 import './App.css'
 
 function App(props) {
@@ -132,6 +133,7 @@ function App(props) {
 
     return (
         <div className="App">
+            <Legend />
             <h1>Semantic Segmentation</h1>
             {!file && (
                 <input
@@ -167,6 +169,7 @@ function App(props) {
                     <img
                         src={segmentedImage}
                         alt="Segmented file with semantic labels"
+                        style={{ maxWidth: '100%', height: 'auto' }}
                     />
                 </div>
             )}
