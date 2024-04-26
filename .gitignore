@@ -30,3 +30,4 @@ checkpoints/
 node_modules
 seg-env/
 temp/
+data/

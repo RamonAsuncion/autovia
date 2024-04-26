@@ -3,8 +3,7 @@ REST API for semantic segmentation inference
 '''
 
 from flask import Response
-import matplotlib.pyplot as plt
-from flask import Flask, request, Response, jsonify, send_from_directory
+from flask import Flask, request, Response, jsonify
 from flask_cors import CORS
 
 import base64
@@ -14,13 +13,21 @@ import io
 from Utils import InferenceWorker
 import os
 import cv2
+import argparse
 
 app = Flask(__name__)
 CORS(app)
 
 video_feed_sessions = {}
 
-MODEL_WEIGHTS_PATH = './weights/model-bnet-one-day.pth'
+# Get the model weights path from the command line arguments
+parser = argparse.ArgumentParser(description='Semantic Segmentation API')
+parser.add_argument('--model_weights_path', type=str, default=None,
+                    help='Path to the model weights file')
+args = parser.parse_args()
+
+MODEL_WEIGHTS_PATH = args.model_weights_path
+assert MODEL_WEIGHTS_PATH is not None, 'Please provide the path to the model weights file'
 inferenceWorker = InferenceWorker(model_weights_path=MODEL_WEIGHTS_PATH)
 
 
