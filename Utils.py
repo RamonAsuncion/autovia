@@ -1,18 +1,11 @@
-from typing import Any, Callable, Dict, List, Optional, Union, Tuple
+from typing import Any, Tuple
 from torchvision.datasets import Cityscapes
 from PIL import Image
 import numpy as np
 import torch
-import torch.nn as nn
-from torch.utils.data import DataLoader, Dataset
-from pytorch_lightning.callbacks import (
-    EarlyStopping,
-    ModelCheckpoint,
-    LearningRateMonitor,
-)
+from torch.utils.data import DataLoader
 import segmentation_models_pytorch as smp
-from pytorch_lightning import seed_everything, LightningModule, Trainer
-from lightning.pytorch.loggers import TensorBoardLogger
+from pytorch_lightning import LightningModule
 import multiprocessing
 import torchmetrics
 import torch
@@ -117,11 +110,6 @@ colors = [
 
 label_colours = dict(zip(range(n_classes), colors))
 
-# inv_normalize = transforms.Normalize(
-#     mean=[-0.485/0.229, -0.456/0.224, -0.406/0.225],
-#     std=[1/0.229, 1/0.224, 1/0.255]
-# )
-
 
 def inv_normalize(*args):
     """The inverse transform that we apply to images that was prepared for model input to now in a state ready for human view."""
@@ -205,8 +193,6 @@ class MyClass(Cityscapes):
                 image=np.array(image), mask=np.array(target)
             )
         return transformed["image"], transformed["mask"]
-
-    # torch.unsqueeze(transformed['mask'],0)
 
 
 class OurModel(LightningModule):
@@ -430,14 +416,21 @@ class InferenceWorker:
         '''
         converts the raw model output to the segmentation mask ready to view.
         assume modelOutput is on CPU
-        assume modelOutput shape is of [N, 20, 256, 512] where N is batch size
+        Expect input of shape is of [20, 256, 512]
+            20 - number of classes
+            256 - height
+            512 - width
+        (so the batch dim is removed)
         '''
         return decode_segmap(torch.argmax(modelOutput.detach(), 0))
 
     def segment(self, img: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         '''
         Given an image in format (H, W, C) normalized to range 0 1, pass it through
-        the pretrained model loaded in memory and return the segmented image.
+        the pretrained model loaded in memory and return the segmented image. 
+        Expects C to be 3 (RGB) or 4 (RGBA). If 4, the alpha channel will be removed.
+        H and W should be at least 256 and 512 respectively. We will resize and pad the image
+        to make it of size 256x512 (HxW) for input into the model.
 
         Returns
             mask_predict (np.ndarray) - the segmented image
