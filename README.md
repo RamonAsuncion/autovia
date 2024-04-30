@@ -6,6 +6,14 @@ Authors: Ramon Asuncion Batista, Santiago Hernandez, Warren Wang
 
 Scene segmentation has many use cases in many fields, including but not limited to autonomous driving purposes.
 
+## Video Demonstration
+
+[Video](https://www.youtube.com/watch?v=dSuW3t7GcoA)
+
+## Data
+
+We used the CityScapes dataset to train the model. You can download the dataset from [this link](https://www.cityscapes-dataset.com/); note you will need to create an account and prove you are affiliated with an educational institution (have a .edu email).
+
 ## Getting Started
 
 Tested using Python 3.10.13.
